@@ -28,5 +28,5 @@ K. Ando and M. Santer, "Mixed quantum-classical Liouville molecular dynamics wit
 ```
 The GPU implementation is described in:
 <br>
-K. Ando, "GPU implementation of mixed quantum-classical Liouville molecular dynamics without momentum jump", [arXiv.2608.14544](https:arxiv.org/abs/2608.14544)
+K. Ando, "GPU implementation of mixed quantum-classical Liouville molecular dynamics without momentum jump", [arXiv.2608.14544](https://arxiv.org/abs/2608.14544)
 
