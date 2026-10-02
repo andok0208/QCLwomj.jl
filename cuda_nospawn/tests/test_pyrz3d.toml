@@ -1,0 +1,13 @@
+[simulation]
+n_gpus     = 2
+#precision  = "Float32"  # or "Float64"
+total_nran = 28000000
+
+[model_params]
+model     = "pyrz3d"
+nmodc1    = 1
+nmodt     = 2
+init_diab = false
+ntime     = 600
+deltat    = 0.05
+

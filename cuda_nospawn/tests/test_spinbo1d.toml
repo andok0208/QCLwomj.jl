@@ -1,0 +1,12 @@
+[simulation]
+n_gpus     = 2
+#precision  = "Float32"  # or "Float64"
+total_nran = 12000000
+
+[model_params]
+model     = "spinbo1d"
+nmodt     = 1
+init_diab = true
+ntime     = 1600
+deltat    = 0.05
+
