@@ -2,16 +2,17 @@
 Juila code for mixed quantum classical Liouville molecular dynamics simulation (without momentum jump).
 
 ## Quick start
-- clone the repository and run:
+Clone the repository and run:
 ```bash
-cd QCLwomj.jl/src/
-julia main.jl
+cd QCLwomj.jl/cuda_nospawn/tests/
+julia main_gpu.jl
 ```
+The results (`ptHad.dat` etc.) are in `outdat/` directory.
 
 ## Reference
-This code is a GPU implementation of the Fortran code developed in
-
-K. Ando and M. Santer, "Mixed quantum-classical Liouville molecular dynamics without momentum jump", *J. Chem. Phys.* **118**, 10399-10406 (2003).
+This code is a GPU implementation of the Fortran code developed in:
+<br>
+K. Ando and M. Santer, "Mixed quantum-classical Liouville molecular dynamics without momentum jump", [*J. Chem. Phys.* **118**, 10399-10406 (2003)](https://dx.doi.org/10.1063/1.1574015).
 
 ```
 @article{Ando2003_QCL,
@@ -25,4 +26,7 @@ K. Ando and M. Santer, "Mixed quantum-classical Liouville molecular dynamics wit
   doi     = {10.1063/1.1574015}
 }
 ```
+The GPU implementation is described in:
+<br>
+K. Ando, "GPU implementation of mixed quantum-classical Liouville molecular dynamics without momentum jump", [arXiv.2608.14544](https:arxiv.org/abs/2608.14544)
 
