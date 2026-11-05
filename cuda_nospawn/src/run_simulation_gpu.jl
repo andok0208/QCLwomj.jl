@@ -41,7 +41,9 @@ include("reduce_metrics_gpu.jl")
 include("symplct4_gpu.jl")
 
 
-function run_gpu_simulation(cpu_state; nran_size=10_000_000, T=Float32, TI=Int32)
+function run_gpu_simulation(
+    cpu_state; nran_size=10_000_000, T=Float32, TI=Int32, save_output=true
+)
     println("===================================================")
     println("  mixed Quantum-Classical Liouville MD Simulation  ")
     println("     (CUDA GPU *without* trajectory spawning)      ")
@@ -68,20 +70,20 @@ function run_gpu_simulation(cpu_state; nran_size=10_000_000, T=Float32, TI=Int32
         t_offset = cpu_state.t_offset
     )
 
-    d_f      = CUDA.zeros(T, cpu_state.neq, nran_size)
-    d_Rho    = CUDA.zeros(Complex{T}, nran_size)
+    d_f     = CUDA.zeros(T, cpu_state.neq, nran_size)
+    d_Rho   = CUDA.zeros(Complex{T}, nran_size)
     d_dm_on = CUDA.ones(TI, nran_size)
 
     d_Pdf_step1 = CUDA.zeros(T, nran_size)
     d_Pdf_step2 = CUDA.zeros(T, nran_size)
 
     # GPU-side output arrays to prevent host-device synchronization during loop
-    d_Padf_gpu    = CUDA.zeros(T, cpu_state.ntime, 4)
-    d_Pdf_gpu     = CUDA.zeros(T, cpu_state.ntime, 4)
+    d_Padf_gpu    = CUDA.zeros(T, cpu_state.ntime, 2)
+    d_Pdf_gpu     = CUDA.zeros(T, cpu_state.ntime, 2)
     d_c2c1ref_gpu = CUDA.zeros(T, cpu_state.ntime)
     d_c2c1imf_gpu = CUDA.zeros(T, cpu_state.ntime)
-    d_qf_gpu      = CUDA.zeros(T, cpu_state.ntime, cpu_state.nmod)
-    d_pf_gpu      = CUDA.zeros(T, cpu_state.ntime, cpu_state.nmod)
+    d_qf_gpu      = CUDA.zeros(T, cpu_state.nmod, cpu_state.ntime)
+    d_pf_gpu      = CUDA.zeros(T, cpu_state.nmod, cpu_state.ntime)
 
     # output arrays
     out = SimulationOutput(nmod=cpu_state.nmod, ntime=cpu_state.ntime, T=T, TI=TI)
@@ -121,14 +123,14 @@ function run_gpu_simulation(cpu_state; nran_size=10_000_000, T=Float32, TI=Int32
             gpu_time = CUDA.@elapsed launch_simulation_kernel(
                 d_f, d_Rho, d_dm_on, cpu_state.E, cpu_state.wf, cpu_state.kappa, cpu_state.lambda,
                 d_zeta1, d_zeta2, t1, t2, 
-                nran_size, Val(Int(params.neq)), params, threads_per_block, blocks_per_grid
+                nran_size, params, threads_per_block, blocks_per_grid
             )
             println("gpu_time for simulation_kernel at ti = $ti : $gpu_time sec.")
         else
             launch_simulation_kernel(
                 d_f, d_Rho, d_dm_on, cpu_state.E, cpu_state.wf, cpu_state.kappa, cpu_state.lambda,
                 d_zeta1, d_zeta2, t1, t2, 
-                nran_size, Val(Int(params.neq)), params, threads_per_block, blocks_per_grid
+                nran_size, params, threads_per_block, blocks_per_grid
             )
         end
 
@@ -136,24 +138,22 @@ function run_gpu_simulation(cpu_state; nran_size=10_000_000, T=Float32, TI=Int32
         if ti == 1 || ti == (cpu_state.ntime - 1)
             gpu_time = CUDA.@elapsed launch_todia_kernel(
                 d_Pdf_step1, d_Pdf_step2, d_f, d_Rho, d_dm_on, cpu_state.E, cpu_state.lambda, cpu_state.kappa, 
-                nran_size, Val(Int(params.neq)), params, threads_per_block, blocks_per_grid
+                nran_size, params, threads_per_block, blocks_per_grid
             )
             #println("gpu_time for todia_kernel      at ti = $ti : $gpu_time sec.")
         else
             launch_todia_kernel(
                 d_Pdf_step1, d_Pdf_step2, d_f, d_Rho, d_dm_on, cpu_state.E, cpu_state.lambda, cpu_state.kappa, 
-                nran_size, Val(Int(params.neq)), params, threads_per_block, blocks_per_grid
+                nran_size, params, threads_per_block, blocks_per_grid
             )
         end
 
-        #=
         # reduction on GPU kernel
-        @cuda(threads=threads_per_block, blocks=blocks_per_grid, reduce_metrics_kernel!(
-            d_Padf_gpu, d_c2c1ref_gpu, d_c2c1imf_gpu, d_Pdf_gpu, d_qf_gpu, d_pf_gpu,
-            d_dm_on, d_Rho, d_Pdf_step1, d_Pdf_step2, d_f,
-            ti, nran_size, Val(Int(params.nmod)), cpu_state.vib
-        ))
-        =#
+        #@cuda(threads=threads_per_block, blocks=blocks_per_grid, reduce_metrics_kernel!(
+        #    d_Padf_gpu, d_c2c1ref_gpu, d_c2c1imf_gpu, d_Pdf_gpu, d_qf_gpu, d_pf_gpu,
+        #    d_dm_on, d_Rho, d_Pdf_step1, d_Pdf_step2, d_f,
+        #    ti, nran_size, Val(Int(params.nmod)), cpu_state.vib
+        #))
 
         # reduction with mapreduce
         reduce_metrics_gpu!(
@@ -177,15 +177,19 @@ function run_gpu_simulation(cpu_state; nran_size=10_000_000, T=Float32, TI=Int32
     t_end = time_ns()
     println("--- elapsed time: $((t_end - t_start)/1e9) sec")
 
-    cpu_state.itraj = nran_size
-    output!(cpu_state, out)
-    #println("GPU Simulation completed successfully!")
+    if save_output
+        cpu_state.itraj = nran_size
+        output!(cpu_state, out)
+    end
+    println("GPU Simulation completed successfully!")
+
+    return out
 end
 
 """ simulation kernel for one thread """
 function simulation_kernel!(
-        d_f, d_Rho, d_dm_on, d_E, d_wf, d_kappa, d_lambda,
-        d_zeta1, d_zeta2, t1, t2, nran, ::Val{NEQ}, params
+    d_f, d_Rho, d_dm_on, d_E, d_wf, d_kappa, d_lambda,
+    d_zeta1, d_zeta2, t1, t2, nran, ::Val{NEQ}, params
 ) where {NEQ}
     itraj = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     if itraj <= nran
@@ -208,31 +212,33 @@ end
 """ Function barriers to compile kernels with static array type parameters """
 function launch_simulation_kernel(
     d_f, d_Rho, d_dm_on, E_cpu, wf_cpu, kappa_cpu, lambda_cpu,
-    d_zeta1, d_zeta2, t1, t2, nran_size, ::Val{NEQ}, params, threads_per_block, blocks_per_grid
-) where {NEQ}
+    d_zeta1, d_zeta2, t1, t2, nran_size, params, threads_per_block, blocks_per_grid
+)
     T = eltype(d_f)
     d_E_static      = SVector{size(E_cpu, 1), T}(E_cpu)
-    d_wf_static     = SMatrix{size(wf_cpu, 1), NEQ, T}(wf_cpu)
-    d_kappa_static  = SMatrix{size(kappa_cpu, 1), NEQ, T}(kappa_cpu)
-    d_lambda_static = SMatrix{size(lambda_cpu, 1), NEQ, T}(lambda_cpu)
+    NMOD = size(wf_cpu, 1)
+    d_wf_static     = SMatrix{NMOD, size(wf_cpu,     2), T}(wf_cpu)
+    d_kappa_static  = SMatrix{NMOD, size(kappa_cpu,  2), T}(kappa_cpu)
+    d_lambda_static = SMatrix{NMOD, size(lambda_cpu, 2), T}(lambda_cpu)
 
     @cuda(threads=threads_per_block, blocks=blocks_per_grid,
         simulation_kernel!(
             d_f, d_Rho, d_dm_on, d_E_static, d_wf_static, d_kappa_static, d_lambda_static,
             d_zeta1, d_zeta2, t1, t2, 
-            nran_size, Val(NEQ), params
+            nran_size, Val(Int(params.neq)), params
         )
     )
 end
 
 function launch_todia_kernel(
     d_Pdf_step1, d_Pdf_step2, d_f, d_Rho, d_dm_on, E_cpu, lambda_cpu, kappa_cpu,
-    nran_size, ::Val{NEQ}, params, threads_per_block, blocks_per_grid
-) where {NEQ}
+    nran_size, params, threads_per_block, blocks_per_grid
+)
     T = eltype(d_f)
     d_E_static      = SVector{size(E_cpu, 1), T}(E_cpu)
-    d_kappa_static  = SMatrix{size(kappa_cpu, 1), NEQ, T}(kappa_cpu)
-    d_lambda_static = SMatrix{size(lambda_cpu, 1), NEQ, T}(lambda_cpu)
+    NMOD = size(kappa_cpu, 1)
+    d_kappa_static  = SMatrix{NMOD, size(kappa_cpu,  2), T}(kappa_cpu)
+    d_lambda_static = SMatrix{NMOD, size(lambda_cpu, 2), T}(lambda_cpu)
 
     @cuda(threads=threads_per_block, blocks=blocks_per_grid,
         todia_kernel!(
@@ -244,26 +250,29 @@ end
 
 function launch_inwf_kernel(
     d_f, d_Rho, d_dm_on, nran_size, d_norm_vec, E_cpu, lambda_cpu, kappa_cpu,
-    ::Val{NEQ}, params, threads, blocks
-) where {NEQ}
+    params, threads, blocks
+)
     T = eltype(d_f)
     d_E_static      = SVector{size(E_cpu, 1), T}(E_cpu)
-    d_kappa_static  = SMatrix{size(kappa_cpu, 1), NEQ, T}(kappa_cpu)
-    d_lambda_static = SMatrix{size(lambda_cpu, 1), NEQ, T}(lambda_cpu)
+    NMOD = size(kappa_cpu, 1)
+    d_kappa_static  = SMatrix{NMOD, size(kappa_cpu,  2), T}(kappa_cpu)
+    d_lambda_static = SMatrix{NMOD, size(lambda_cpu, 2), T}(lambda_cpu)
     d_rand_x = CUDA.randn(T, nran_size, params.nmod)
     d_rand_p = CUDA.randn(T, nran_size, params.nmod)
     d_rand_zeta = CUDA.rand(T, nran_size)
 
     @cuda(threads=threads, blocks=blocks, 
         inwf_gpu_kernel!(
-            d_f, d_Rho, d_dm_on, nran_size, d_norm_vec, d_E_static, d_lambda_static, d_kappa_static, params,
+            d_f, d_Rho, d_dm_on, nran_size, d_norm_vec, 
+            d_E_static, d_lambda_static, d_kappa_static, params,
             d_rand_x, d_rand_p, d_rand_zeta
         )
     )
 end
 
 function initialize_simulation_on_gpu(
-        d_f, d_Rho, d_dm_on, state::SimulationState, nran_size, params)
+    d_f, d_Rho, d_dm_on, state::SimulationState, nran_size, params
+)
     T = eltype(d_f)
     TI = eltype(nran_size)
 
@@ -273,8 +282,9 @@ function initialize_simulation_on_gpu(
     blocks  = cld(nran_size, threads)
 
     launch_inwf_kernel(
-        d_f, d_Rho, d_dm_on, TI(nran_size), d_norm_vec, state.E, state.lambda, state.kappa,
-        Val(Int(params.neq)), params, threads, blocks
+        d_f, d_Rho, d_dm_on, TI(nran_size), d_norm_vec, 
+        state.E, state.lambda, state.kappa,
+        params, threads, blocks
     )
     CUDA.synchronize()
     return d_f, d_Rho, d_dm_on

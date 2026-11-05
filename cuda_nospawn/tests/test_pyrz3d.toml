@@ -1,7 +1,8 @@
 [simulation]
 n_gpus     = 2
 #precision  = "Float32"  # or "Float64"
-total_nran = 28000000
+#total_nran = 28000000
+total_nran = 100000000
 
 [model_params]
 model     = "pyrz3d"

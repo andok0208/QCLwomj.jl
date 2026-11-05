@@ -4,7 +4,7 @@ n_gpus     = 2
 total_nran = 12000000
 
 [model_params]
-model     = "spinbo1d"
+model     = "spinbo"
 nmodt     = 1
 init_diab = true
 ntime     = 1600

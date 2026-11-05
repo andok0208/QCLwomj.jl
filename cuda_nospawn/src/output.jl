@@ -102,8 +102,8 @@ function output!(state::SimulationState, out::SimulationOutput)
             open(dir * "pf_$j.dat", "w") do f_p
                 for i in 1:state.ntime
                     t = (i - 1) * dt
-                    write(f_q, "$t $(out.qf[i, j] * norm_traj)\n")
-                    write(f_p, "$t $(out.pf[i, j] * norm_traj)\n")
+                    write(f_q, "$t $(out.qf[j, i] * norm_traj)\n")
+                    write(f_p, "$t $(out.pf[j, i] * norm_traj)\n")
                 end
             end
             end

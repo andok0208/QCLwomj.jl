@@ -6,7 +6,7 @@ function winit!(state::SimulationState)
     if state.model == "pyrz3d"
         state.cmode  = true
         state.spinbo = false
-    elseif state.model == "spinbo1d" || state.model == "spinbo3d"
+    elseif state.model == "spinbo"
         state.cmode  = false
         state.spinbo = true
     else
@@ -19,9 +19,9 @@ function winit!(state::SimulationState)
 
     # coupling modes (nmodc1)
     if state.cmode
-        state.wf[1, :]  .= state.wcoup0
-        state.wf[2, :]  .= state.wcoup^2 / state.wcoup0
-        state.wf[3, :]  .= state.wcoup^2 / state.wcoup0
+        state.wf[:, 1]  .= state.wcoup0
+        state.wf[:, 2]  .= state.wcoup^2 / state.wcoup0
+        state.wf[:, 3]  .= state.wcoup^2 / state.wcoup0
         state.lambda[1, 1] = state.lambda_scalar
     end
 
@@ -30,27 +30,27 @@ function winit!(state::SimulationState)
     for i in 1:state.nel
         m = 1
         if m > state.nmodt; continue; end
-        state.wf[i, state.nmodc + m] = state.w1
-        if i != 1; state.kappa[i, state.nmodc + m] = state.k1[i-1]; end
+        state.wf[state.nmodc + m, i] = state.w1
+        if i != 1; state.kappa[state.nmodc + m, i] = state.k1[i-1]; end
 
         m += 1
         if m > state.nmodt; continue; end
-        state.wf[i, state.nmodc + m] = state.w2
-        if i != 1; state.kappa[i, state.nmodc + m] = state.k2[i-1]; end
+        state.wf[state.nmodc + m, i] = state.w2
+        if i != 1; state.kappa[state.nmodc + m, i] = state.k2[i-1]; end
 
         m += 1
         if m > state.nmodt; continue; end
-        state.wf[i, state.nmodc + m] = state.w3
-        if i != 1; state.kappa[i, state.nmodc + m] = state.k3[i-1]; end
+        state.wf[state.nmodc + m, i] = state.w3
+        if i != 1; state.kappa[state.nmodc + m, i] = state.k3[i-1]; end
     end
 
     # Stabilization Energies
     @simd for m in 1:state.nmod
         @simd for i in 1:state.nel
-            if state.wf[i, m] != zero(T)
-                state.ecorv[i, m] = state.kappa[i, m]^2 / 2state.wf[i, m]
+            if state.wf[m, i] != zero(T)
+                state.ecorv[m, i] = state.kappa[m, i]^2 / 2state.wf[m, i]
             else
-                state.ecorv[i, m] = zero(T)
+                state.ecorv[m, i] = zero(T)
             end
         end
     end
@@ -58,8 +58,8 @@ function winit!(state::SimulationState)
     # contribution from coupling modes
     @simd for i in 1:state.nel
         @simd for m in 1:state.nmodc1
-            if state.wf[i, m] != zero(T)
-                state.ecorv[i, m] = state.lambda[1, m]^2 / 2state.wf[i, m]
+            if state.wf[m, i] != zero(T)
+                state.ecorv[m, i] = state.lambda[m, 1]^2 / 2state.wf[m, i]
             end
         end
         # skipping parts for nmodc2, nmodc3
@@ -69,19 +69,19 @@ function winit!(state::SimulationState)
     @simd for i in 1:state.nel
         state.ecor[i] = zero(T)
         @simd for m in 1:state.nmod
-            state.ecor[i] += state.ecorv[i, m]
+            state.ecor[i] += state.ecorv[m, i]
         end
     end
 
     state.enull = zero(T)
     @simd for i in 1:state.nmod
-        state.enull += state.wf[1, i]/2
+        state.enull += state.wf[i, 1]/2
     end
 
     # norms for the nuclear distribution
     @simd for m in 1:state.nmod
         if state.eTemp > 1e-4
-            state.norm_vec[m] = sqrt( one(T) / 2tanh(state.wf[1, m] / 2state.eTemp) )
+            state.norm_vec[m] = sqrt( one(T) / 2tanh(state.wf[m, 1] / 2state.eTemp) )
         else  # ground state (T=0)
             state.norm_vec[m] = sqrt(T(0.5))
         end

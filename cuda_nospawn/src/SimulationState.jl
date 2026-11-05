@@ -3,7 +3,7 @@ using Random
 """ struct for simulation parameters """
 Base.@kwdef mutable struct SimulationState{T<:AbstractFloat, TI<:Integer}
 
-    model::String = "spinbo1d"
+    model::String = "spinbo"
 
     nmodc1::Int = 0  # number of V_12 coupling modes
     nmodc2::Int = 0  # number of V_02 coupling modes
@@ -27,11 +27,11 @@ Base.@kwdef mutable struct SimulationState{T<:AbstractFloat, TI<:Integer}
 
     # allocated when the struct is created
     E     ::Vector{T} = zeros(T, 4)
-    wf    ::Matrix{T} = zeros(T, 3, neq)
-    kappa ::Matrix{T} = zeros(T, 3, neq)
-    lambda::Matrix{T} = zeros(T, 1, neq)
+    wf    ::Matrix{T} = zeros(T, nmod, 3)
+    kappa ::Matrix{T} = zeros(T, nmod, 3)
+    lambda::Matrix{T} = zeros(T, nmod, 1)
     ecor  ::Vector{T} = zeros(T, 3)
-    ecorv ::Matrix{T} = zeros(T, 3, neq)
+    ecorv ::Matrix{T} = zeros(T, nmod, 3)
     enull ::T         = zero(T)
 
     cmode::Bool  = false  # involves nuclear mode as off-diagonal coupling in the diabatic picture
@@ -57,7 +57,7 @@ Base.@kwdef mutable struct SimulationState{T<:AbstractFloat, TI<:Integer}
     kwrite::Int               = 100
     iran::Int                 = 123
     eTemp::T                  = zero(T)
-    norm_vec::Vector{T}       = ones(T, neq)
+    norm_vec::Vector{T}       = ones(T, nmod)
     init_diab::Bool           = false
 
     is_adiab::Bool            = false
@@ -69,6 +69,7 @@ Base.@kwdef mutable struct SimulationState{T<:AbstractFloat, TI<:Integer}
     # trajectory loop and output
     itraj::Int = 1
 
+    # used in threads_spawn/src/rk4.jl (not in cuda_(no)spawn/)
     rk4_k1::Vector{T} = zeros(T, neq)
     rk4_k2::Vector{T} = zeros(T, neq)
     rk4_k3::Vector{T} = zeros(T, neq)
@@ -82,7 +83,8 @@ end
 
 """ helper wrapper """
 function SimulationState(; T=Float64, TI=Int, 
-        nmodc1=0, nmodc2=0, nmodc3=0, nmodt=0, kwargs...)
+        nmodc1=0, nmodc2=0, nmodc3=0, nmodt=0, kwargs...
+)
     nmodc = nmodc1+nmodc2+nmodc3
     nmod  = nmodc+nmodt
     neq   = 2nmod

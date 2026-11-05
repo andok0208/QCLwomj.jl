@@ -1,28 +1,28 @@
 # --- rk4_step_gpu.jl ---
 """ 4th order Runge-Kutta """
-@inline function rk4_step_gpu!(itraj, d_f, dt, current_dmo, ctx, ::Val{NEQ}) where {NEQ}
-    T = eltype(d_f)
+@inline function rk4_step_gpu!(u, dt, current_dmo, ctx)
+    T = eltype(u)
 
-    dt2 = dt / 2
-    dt6 = dt / 6
+    dt2 = T(dt / 2)
+    dt6 = T(dt / 6)
 
-    u = SVector{NEQ, T}(ntuple(idx -> d_f[idx, itraj], Val(NEQ)))
+    u_next = MVector{length(u), T}(undef)
 
-    k1 = derivpx_gpu(u, itraj, current_dmo, ctx)
+    k1 = derivpx_gpu(u, current_dmo, ctx)
     u_next = u + dt2 * k1
 
-    k2 = derivpx_gpu(u_next, itraj, current_dmo, ctx)
+    k2 = derivpx_gpu(u_next, current_dmo, ctx)
     u_next = u + dt2 * k2
 
-    k3 = derivpx_gpu(u_next, itraj, current_dmo, ctx)
+    k3 = derivpx_gpu(u_next, current_dmo, ctx)
     u_next = u + dt  * k3
 
-    k4 = derivpx_gpu(u_next, itraj, current_dmo, ctx)
-    u_next = u + dt6 * (k1 + 2 * k2 + 2 * k3 + k4)
+    k4 = derivpx_gpu(u_next, current_dmo, ctx)
 
-    @inbounds for idx in 1:NEQ
-        d_f[idx, itraj] = u_next[idx]
+    @inbounds for idx in 1:length(u)
+        u[idx] = u[idx] + dt6 * (k1[idx] + 2k2[idx] + 2k3[idx] + k4[idx])
     end
+
     return nothing
 end
 

@@ -5,7 +5,8 @@ using StaticArrays
 """ with mapreduce """
 function reduce_metrics_gpu!(
     d_Padf_gpu, d_c2c1ref_gpu, d_c2c1imf_gpu, d_Pdf_gpu, d_qf_gpu, d_pf_gpu,
-    d_dm_on, d_Rho, d_Pdf_step1, d_Pdf_step2, d_f, ti, nmod, vib)
+    d_dm_on, d_Rho, d_Pdf_step1, d_Pdf_step2, d_f, ti, nmod, vib
+)
 
     T = eltype(d_f)
     zeroT = T(0.0)
@@ -41,8 +42,8 @@ function reduce_metrics_gpu!(
 
     if vib
         sum_f = mapreduce(T, +, d_f, dims=2)
-        d_qf_gpu[ti, :] .= sum_f[2*(1:nmod), 1]
-        d_pf_gpu[ti, :] .= sum_f[2*(1:nmod) .- 1, 1]
+        d_qf_gpu[:, ti] .= sum_f[2*(1:nmod), 1]
+        d_pf_gpu[:, ti] .= sum_f[2*(1:nmod) .- 1, 1]
     end
 
 end
@@ -166,13 +167,13 @@ function reduce_metrics_kernel!(
         for m in 1:NMOD
             b_sum_q = block_reduce!(sum_qf[m], shared_mem)
             if tid == 1
-                CUDA.@atomic d_qf[ti, m] += b_sum_q
+                CUDA.@atomic d_qf[m, ti] += b_sum_q
             end
             CUDA.sync_threads()
 
             b_sum_p = block_reduce!(sum_pf[m], shared_mem)
             if tid == 1
-                CUDA.@atomic d_pf[ti, m] += b_sum_p
+                CUDA.@atomic d_pf[m, ti] += b_sum_p
             end
             CUDA.sync_threads()
         end

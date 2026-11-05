@@ -5,10 +5,10 @@ Base.@kwdef mutable struct SimulationOutput{T<:AbstractFloat, TI<:Integer}
     nmod  ::Int = 1
     ntime ::Int = 1
 
-    Pad     ::Matrix{T} = zeros(T, ntime, 4) # adiabatic population
-    Pd      ::Matrix{T} = zeros(T, ntime, 4) # diabatic population
-    q_hist  ::Matrix{T} = zeros(T, ntime, nmod) # coordinates history
-    p_hist  ::Matrix{T} = zeros(T, ntime, nmod) # momentua history
+    Pad     ::Matrix{T} = zeros(T, ntime, 2) # adiabatic population
+    Pd      ::Matrix{T} = zeros(T, ntime, 2) # diabatic population
+    q_hist  ::Matrix{T} = zeros(T, nmod, ntime) # coordinates history
+    p_hist  ::Matrix{T} = zeros(T, nmod, ntime) # momentua history
 
     c2c1re  ::Vector{T} = zeros(T, ntime)
     c2c1im  ::Vector{T} = zeros(T, ntime)
@@ -19,10 +19,10 @@ Base.@kwdef mutable struct SimulationOutput{T<:AbstractFloat, TI<:Integer}
     Pad_sos ::Vector{T} = zeros(T, ntime)
 
     # ensemble average storage
-    Padf     ::Matrix{T} = zeros(T, ntime, 4)
-    Pdf      ::Matrix{T} = zeros(T, ntime, 4)
-    qf       ::Matrix{T} = zeros(T, ntime, nmod) # (ntime, nmod)
-    pf       ::Matrix{T} = zeros(T, ntime, nmod)
+    Padf     ::Matrix{T} = zeros(T, ntime, 2)
+    Pdf      ::Matrix{T} = zeros(T, ntime, 2)
+    qf       ::Matrix{T} = zeros(T, nmod, ntime) # (nmod, ntime)
+    pf       ::Matrix{T} = zeros(T, nmod, ntime)
     c2c1ref  ::Vector{T} = zeros(T, ntime)
     c2c1imf  ::Vector{T} = zeros(T, ntime)
     econf    ::Vector{T} = zeros(T, ntime)

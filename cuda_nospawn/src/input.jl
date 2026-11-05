@@ -1,7 +1,6 @@
 # --- input.jl ---
 """
 input for molecular system
-the S2 vertical energy is by convention zero, i.e. E(2) = 0.d0
 """
 function input!(state::SimulationState)
     ec   = 1.6021766e-19  # C
@@ -15,6 +14,7 @@ function input!(state::SimulationState)
     if state.model == "pyrz3d"
         println("model = $(state.model): 3D pyrazine (Schneider & Domcke, CPL 159 (1989) 61)")
         state.E_ho[1]  = -0.9 * tofsi
+        state.E_ho[2]  =  0.0
         state.w1    =  0.12620 * tofsi
         state.k1[1] =  0.03700 * tofsi
         state.k1[2] = -0.25340 * tofsi
@@ -24,9 +24,9 @@ function input!(state::SimulationState)
         state.wcoup =  0.11780 * tofsi
         state.wcoup0=  state.wcoup
         state.lambda_scalar = 0.26180 * tofsi
-        println(" lambda   = ", state.lambda_scalar / tofsi)
-    elseif state.model == "spinbo1d" || state.model == "spinbo3d"
-        println("model = $(state.model): Spin-Boson model (1D / 3D)")
+        #println(" lambda   = ", state.lambda_scalar / tofsi)
+    elseif state.model == "spinbo"
+        println("model = $(state.model): Spin-Boson model")
         state.E_ho[1]  = 0.3
         state.E_ho[2]  = 0.6
         g = 0.1  # eV

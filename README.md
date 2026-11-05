@@ -7,7 +7,7 @@ Clone the repository and run:
 cd QCLwomj.jl/cuda_nospawn/tests/
 julia main_gpu.jl
 ```
-The results (`ptHad.dat` etc.) are in `outdat/` directory.
+The results (`p2tadH.dat` etc.) are in `outdat/` directory.
 
 ## Reference
 This code is a GPU implementation of the Fortran code developed in:

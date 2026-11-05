@@ -1,9 +1,8 @@
-# --- main.jl ---
+# --- main_gpu.jl ---
 using Distributed
 using TOML
 
 input_file = length(ARGS) > 0 ? ARGS[1] : "input.toml"
-
 config = isfile(input_file) ? TOML.parsefile(input_file) : Dict{String, Any}()
 
 sim_cfg   = get(config, "simulation",   Dict{String, Any}())
@@ -22,7 +21,7 @@ else
 end
 
 model_params = Dict{String, Any}(
-    "model"     => String(get(model_cfg, "model", "spinbo1d")),
+    "model"     => String(get(model_cfg, "model", "spinbo")),
     "nmodc1"    => Int(get(model_cfg, "nmodc1", 0)),
     "nmodt"     => Int(get(model_cfg, "nmodt",  1)),
     "init_diab" => Bool(get(model_cfg, "init_diab", true)),
@@ -41,11 +40,33 @@ end
 @everywhere include("../src/SimulationState.jl")
 @everywhere include("../src/run_simulation_gpu.jl")
 
+
+function merge_simulation_outputs(outputs)
+    merged = deepcopy(outputs[1])
+    for i in 2:length(outputs)
+        merged.Padf    .+= outputs[i].Padf
+        merged.Pdf     .+= outputs[i].Pdf
+        merged.c2c1ref .+= outputs[i].c2c1ref
+        merged.c2c1imf .+= outputs[i].c2c1imf
+        
+        if hasproperty(merged, :qf) && !isempty(merged.qf)
+            merged.qf  .+= outputs[i].qf
+            merged.pf  .+= outputs[i].pf
+        end
+        if hasproperty(merged, :econf) && !isempty(merged.econf)
+            merged.econf .+= outputs[i].econf
+            merged.eoffs .+= outputs[i].eoffs
+        end
+    end
+    return merged
+end
+
+
 function main_multi_gpu(N_GPUS, total_nran, T, TI, model_params)
     nran_per_gpu = div(total_nran, N_GPUS)
 
     println("===================================================")
-    println("  Running Simulation on $N_GPUS GPU(s)")
+    println("  Running Multi-GPU Simulation on $N_GPUS GPU(s)")
     println("  Precision     : $T")
     println("  Total nran    : $total_nran ($nran_per_gpu per GPU)")
     println("  Model         : $(model_params["model"])")
@@ -67,7 +88,7 @@ function main_multi_gpu(N_GPUS, total_nran, T, TI, model_params)
         @async remotecall_wait(worker_id) do
             CUDA.device!(gpu_id - 1)
             state = deepcopy(base_cpu_state)
-            run_gpu_simulation(state, nran_size=1, T=T, TI=TI)
+            run_gpu_simulation(state, nran_size=1, T=T, TI=TI, save_output=false)
         end
     end
     println("--- JIT Compilation completed ---\n")
@@ -75,21 +96,30 @@ function main_multi_gpu(N_GPUS, total_nran, T, TI, model_params)
     println("--- Starting Main Parallel Execution ---")
     t_start = time_ns()
 
-    @sync for (gpu_id, worker_id) in enumerate(workers())
-        @async remotecall_wait(worker_id) do
+    futures = map(enumerate(workers())) do (gpu_id, worker_id)
+        remotecall(worker_id) do
             CUDA.device!(gpu_id - 1)
             println("Worker $(myid()) starting on GPU $(CUDA.deviceid(CUDA.device()))")
 
             state = deepcopy(base_cpu_state)
             state.iran = base_cpu_state.iran + myid() * 10000
 
-            run_gpu_simulation(state, nran_size=nran_per_gpu, T=T, TI=TI)
+            return run_gpu_simulation(state, nran_size=nran_per_gpu, T=T, TI=TI, save_output=false)
         end
     end
+
+    results = fetch.(futures)
+    println("\n--- Merging outputs from all GPUs ---")
+    merged_output = merge_simulation_outputs(results)
+
+    final_state = deepcopy(base_cpu_state)
+    final_state.itraj = total_nran
+    output!(final_state, merged_output)
 
     t_end = time_ns()
     println("===================================================")
     println(" Simulation Total Elapsed Time: $((t_end - t_start)/1e9) sec")
+    println(" Results correctly saved to outdat/")
     println("===================================================")
 end
 
