@@ -1,6 +1,7 @@
 # --- main_gpu.jl ---
 using Distributed
 using TOML
+using CUDA
 
 input_file = length(ARGS) > 0 ? ARGS[1] : "input.toml"
 config = isfile(input_file) ? TOML.parsefile(input_file) : Dict{String, Any}()
@@ -8,7 +9,26 @@ config = isfile(input_file) ? TOML.parsefile(input_file) : Dict{String, Any}()
 sim_cfg   = get(config, "simulation",   Dict{String, Any}())
 model_cfg = get(config, "model_params", Dict{String, Any}())
 
-N_GPUS     = Int(get(sim_cfg, "n_gpus", 1))
+requested_gpus = Int(get(sim_cfg, "n_gpus", 1))
+available_gpus = length(CUDA.devices())
+
+if requested_gpus > available_gpus
+    println("------------------------------------------------------------------")
+    println(" [WARNING] Requested n_gpus ($requested_gpus) > Available GPUs ($available_gpus).")
+    println("           Falling back to N_GPUS = $available_gpus.")
+    println("------------------------------------------------------------------")
+    N_GPUS = available_gpus
+elseif requested_gpus <= 0
+    println(" [WARNING] Invalid n_gpus ($requested_gpus). Fallback to N_GPUS = 1.")
+    N_GPUS = 1
+else
+    N_GPUS = requested_gpus
+end
+
+if N_GPUS == 0
+    error("No CUDA-capable GPUs detected on this machine.")
+end
+
 total_nran = Int(get(sim_cfg, "total_nran", 12_000_000))
 prec_str   = String(get(sim_cfg, "precision", "Float32"))
 
